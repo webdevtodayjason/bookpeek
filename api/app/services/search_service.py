@@ -63,7 +63,8 @@ class GoogleBooksSearchService:
         max_results: int = 10,
         start_index: int = 0,
         order_by: str = 'relevance',
-        lang_restrict: Optional[str] = None
+        lang_restrict: Optional[str] = None,
+        filter_params: Optional[Dict[str, str]] = None
     ) -> Dict[str, Any]:
         """
         Search for books using Google Books API
@@ -74,6 +75,7 @@ class GoogleBooksSearchService:
             start_index: Starting index for pagination
             order_by: Sort order ('relevance' or 'newest')
             lang_restrict: Restrict to specific language (e.g., 'en')
+            filter_params: Additional filters (e.g., {'printType': 'books', 'filter': 'ebooks'})
             
         Returns:
             Dictionary containing search results and metadata
@@ -98,6 +100,10 @@ class GoogleBooksSearchService:
                 
             if lang_restrict:
                 params['langRestrict'] = lang_restrict
+                
+            # Add additional filters
+            if filter_params:
+                params.update(filter_params)
             
             # Make API request
             if not self.session:
@@ -295,6 +301,108 @@ class GoogleBooksSearchService:
             return False
         
         return True
+    
+    async def search_by_author(self, author: str, **kwargs) -> Dict[str, Any]:
+        """
+        Search for books by author
+        
+        Args:
+            author: Author name
+            **kwargs: Additional search parameters
+            
+        Returns:
+            Dictionary containing search results
+        """
+        query = f'inauthor:"{author}"'
+        return await self.search_books(query, **kwargs)
+    
+    async def search_by_title(self, title: str, **kwargs) -> Dict[str, Any]:
+        """
+        Search for books by title
+        
+        Args:
+            title: Book title
+            **kwargs: Additional search parameters
+            
+        Returns:
+            Dictionary containing search results
+        """
+        query = f'intitle:"{title}"'
+        return await self.search_books(query, **kwargs)
+    
+    async def search_by_category(self, category: str, **kwargs) -> Dict[str, Any]:
+        """
+        Search for books by category/subject
+        
+        Args:
+            category: Category/subject name
+            **kwargs: Additional search parameters
+            
+        Returns:
+            Dictionary containing search results
+        """
+        query = f'subject:"{category}"'
+        return await self.search_books(query, **kwargs)
+    
+    async def search_by_publisher(self, publisher: str, **kwargs) -> Dict[str, Any]:
+        """
+        Search for books by publisher
+        
+        Args:
+            publisher: Publisher name
+            **kwargs: Additional search parameters
+            
+        Returns:
+            Dictionary containing search results
+        """
+        query = f'inpublisher:"{publisher}"'
+        return await self.search_books(query, **kwargs)
+    
+    async def advanced_search(
+        self,
+        title: Optional[str] = None,
+        author: Optional[str] = None,
+        publisher: Optional[str] = None,
+        category: Optional[str] = None,
+        isbn: Optional[str] = None,
+        **kwargs
+    ) -> Dict[str, Any]:
+        """
+        Perform advanced search with multiple criteria
+        
+        Args:
+            title: Book title
+            author: Author name
+            publisher: Publisher name
+            category: Category/subject
+            isbn: ISBN number
+            **kwargs: Additional search parameters
+            
+        Returns:
+            Dictionary containing search results
+        """
+        query_parts = []
+        
+        if title:
+            query_parts.append(f'intitle:"{title}"')
+        if author:
+            query_parts.append(f'inauthor:"{author}"')
+        if publisher:
+            query_parts.append(f'inpublisher:"{publisher}"')
+        if category:
+            query_parts.append(f'subject:"{category}"')
+        if isbn:
+            query_parts.append(f'isbn:{isbn}')
+        
+        if not query_parts:
+            return {
+                'success': False,
+                'error': 'At least one search criteria must be provided',
+                'books': []
+            }
+        
+        query = ' '.join(query_parts)
+        return await self.search_books(query, **kwargs)
 
 # Create singleton instance
 _search_service: Optional[GoogleBooksSearchService] = None

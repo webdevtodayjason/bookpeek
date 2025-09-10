@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useCallback, useEffect } from 'react'
-import { Search, Loader2, Book, Calendar, User, Hash } from 'lucide-react'
+import { Search, Loader2, Book, Calendar, User, Hash, Settings, ChevronDown, X } from 'lucide-react'
 
 interface BookResult {
   id: string
@@ -39,6 +39,15 @@ export default function SearchInterface() {
   const [totalResults, setTotalResults] = useState(0)
   const [currentPage, setCurrentPage] = useState(0)
   const [searchType, setSearchType] = useState<'general' | 'isbn'>('general')
+  const [showAdvanced, setShowAdvanced] = useState(false)
+  const [advancedFilters, setAdvancedFilters] = useState({
+    author: '',
+    title: '',
+    publisher: '',
+    category: ''
+  })
+  const [sortOrder, setSortOrder] = useState<'relevance' | 'newest'>('relevance')
+  const [language, setLanguage] = useState<string>('')
 
   const detectSearchType = (query: string) => {
     // Check if query looks like an ISBN (10 or 13 digits, possibly with hyphens)
@@ -73,13 +82,30 @@ export default function SearchInterface() {
       if (searchType === 'isbn') {
         const isbn = searchQuery.replace(/[-\s]/g, '')
         response = await fetch(`/api/search/books/isbn/${isbn}`)
+      } else if (showAdvanced && Object.values(advancedFilters).some(f => f.trim())) {
+        // Advanced search
+        const params = new URLSearchParams({
+          max_results: '20',
+          start_index: (currentPage * 20).toString(),
+          order_by: sortOrder
+        })
+        
+        if (advancedFilters.title) params.append('title', advancedFilters.title)
+        if (advancedFilters.author) params.append('author', advancedFilters.author)
+        if (advancedFilters.publisher) params.append('publisher', advancedFilters.publisher)
+        if (advancedFilters.category) params.append('category', advancedFilters.category)
+        if (language) params.append('lang', language)
+        
+        response = await fetch(`/api/search/books/advanced?${params}`)
       } else {
         const params = new URLSearchParams({
           q: searchQuery,
           max_results: '20',
           start_index: (currentPage * 20).toString(),
-          order_by: 'relevance'
+          order_by: sortOrder
         })
+        
+        if (language) params.append('lang', language)
         response = await fetch(`/api/search/books?${params}`)
       }
 
@@ -109,7 +135,7 @@ export default function SearchInterface() {
     } finally {
       setLoading(false)
     }
-  }, [searchQuery, currentPage, searchType])
+  }, [searchQuery, currentPage, searchType, showAdvanced, advancedFilters, sortOrder, language])
 
   // Auto-search when page changes
   useEffect(() => {
@@ -177,6 +203,114 @@ export default function SearchInterface() {
           <p className="text-sm text-muted-foreground mt-2">
             Searching by ISBN: {searchQuery}
           </p>
+        )}
+        
+        {/* Search Options */}
+        <div className="flex items-center gap-4 mt-4">
+          <button
+            type="button"
+            onClick={() => setShowAdvanced(!showAdvanced)}
+            className="flex items-center gap-2 px-3 py-2 text-sm bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors"
+          >
+            <Settings className="w-4 h-4" />
+            Advanced Search
+            <ChevronDown className={`w-4 h-4 transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
+          </button>
+          
+          {/* Sort Order */}
+          <select
+            value={sortOrder}
+            onChange={(e) => setSortOrder(e.target.value as 'relevance' | 'newest')}
+            className="px-3 py-2 text-sm rounded-lg border border-input bg-background"
+          >
+            <option value="relevance">Sort by Relevance</option>
+            <option value="newest">Sort by Newest</option>
+          </select>
+          
+          {/* Language Filter */}
+          <select
+            value={language}
+            onChange={(e) => setLanguage(e.target.value)}
+            className="px-3 py-2 text-sm rounded-lg border border-input bg-background"
+          >
+            <option value="">Any Language</option>
+            <option value="en">English</option>
+            <option value="es">Spanish</option>
+            <option value="fr">French</option>
+            <option value="de">German</option>
+            <option value="it">Italian</option>
+          </select>
+        </div>
+        
+        {/* Advanced Search Panel */}
+        {showAdvanced && (
+          <div className="mt-4 p-4 bg-card border border-border rounded-lg">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Title</label>
+                <input
+                  type="text"
+                  placeholder="Search by title..."
+                  value={advancedFilters.title}
+                  onChange={(e) => setAdvancedFilters({...advancedFilters, title: e.target.value})}
+                  className="w-full px-3 py-2 rounded border border-input bg-background"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium mb-1">Author</label>
+                <input
+                  type="text"
+                  placeholder="Search by author..."
+                  value={advancedFilters.author}
+                  onChange={(e) => setAdvancedFilters({...advancedFilters, author: e.target.value})}
+                  className="w-full px-3 py-2 rounded border border-input bg-background"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium mb-1">Publisher</label>
+                <input
+                  type="text"
+                  placeholder="Search by publisher..."
+                  value={advancedFilters.publisher}
+                  onChange={(e) => setAdvancedFilters({...advancedFilters, publisher: e.target.value})}
+                  className="w-full px-3 py-2 rounded border border-input bg-background"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium mb-1">Category</label>
+                <input
+                  type="text"
+                  placeholder="Search by category..."
+                  value={advancedFilters.category}
+                  onChange={(e) => setAdvancedFilters({...advancedFilters, category: e.target.value})}
+                  className="w-full px-3 py-2 rounded border border-input bg-background"
+                />
+              </div>
+            </div>
+            
+            <div className="flex justify-between items-center mt-4">
+              <button
+                type="button"
+                onClick={() => setAdvancedFilters({author: '', title: '', publisher: '', category: ''})}
+                className="flex items-center gap-1 px-3 py-2 text-sm text-muted-foreground hover:text-foreground"
+              >
+                <X className="w-4 h-4" />
+                Clear Filters
+              </button>
+              
+              <button
+                type="button"
+                onClick={handleSearch}
+                disabled={loading}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50"
+              >
+                Search with Filters
+              </button>
+            </div>
+          </div>
         )}
       </div>
 
