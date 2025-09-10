@@ -2,8 +2,9 @@
 Search router for book searches
 """
 
-from fastapi import APIRouter, Query, HTTPException, Depends
+from fastapi import APIRouter, Query, HTTPException, Depends, Path
 from typing import Optional, Dict, Any
+from dataclasses import asdict
 import logging
 
 from ..services.search_service import get_search_service, GoogleBooksSearchService
@@ -51,7 +52,7 @@ async def search_books(
             )
         
         # Perform search
-        async with search_service as service:
+        async with GoogleBooksSearchService() as service:
             results = await service.search_books(
                 query=q,
                 max_results=max_results,
@@ -109,13 +110,13 @@ async def search_by_isbn(
         search_service = get_search_service()
         
         # Search by ISBN
-        async with search_service as service:
+        async with GoogleBooksSearchService() as service:
             book = await service.search_by_isbn(isbn_clean)
         
         if book:
             return {
                 'success': True,
-                'book': book
+                'book': asdict(book) if hasattr(book, '__dataclass_fields__') else book
             }
         else:
             raise HTTPException(
@@ -150,13 +151,13 @@ async def get_book_details(
         search_service = get_search_service()
         
         # Get book details
-        async with search_service as service:
+        async with GoogleBooksSearchService() as service:
             book = await service.get_book_by_id(volume_id)
         
         if book:
             return {
                 'success': True,
-                'book': book
+                'book': asdict(book) if hasattr(book, '__dataclass_fields__') else book
             }
         else:
             raise HTTPException(
@@ -171,6 +172,136 @@ async def get_book_details(
         raise HTTPException(
             status_code=500,
             detail="Internal server error fetching book details"
+        )
+
+@router.get("/books/advanced")
+async def advanced_search(
+    title: Optional[str] = Query(None, min_length=1, max_length=200, description="Book title"),
+    author: Optional[str] = Query(None, min_length=1, max_length=200, description="Author name"),
+    publisher: Optional[str] = Query(None, min_length=1, max_length=200, description="Publisher name"),
+    category: Optional[str] = Query(None, min_length=1, max_length=100, description="Category/subject"),
+    isbn: Optional[str] = Query(None, min_length=10, max_length=13, description="ISBN"),
+    max_results: int = Query(10, ge=1, le=40, description="Maximum results to return"),
+    start_index: int = Query(0, ge=0, description="Starting index for pagination"),
+    order_by: str = Query("relevance", regex="^(relevance|newest)$", description="Sort order"),
+    lang: Optional[str] = Query(None, min_length=2, max_length=5, description="Language restriction")
+) -> Dict[str, Any]:
+    """
+    Advanced search for books with multiple criteria
+    
+    Args:
+        title: Book title to search for
+        author: Author name to search for
+        publisher: Publisher name to search for
+        category: Category/subject to search for
+        isbn: ISBN to search for
+        max_results: Maximum number of results (1-40)
+        start_index: Starting index for pagination
+        order_by: Sort order ('relevance' or 'newest')
+        lang: Language restriction (e.g., 'en' for English)
+    
+    Returns:
+        Search results with books and metadata
+    """
+    try:
+        # Validate that at least one search criteria is provided
+        if not any([title, author, publisher, category, isbn]):
+            raise HTTPException(
+                status_code=400,
+                detail="At least one search criteria must be provided"
+            )
+        
+        # Get search service
+        search_service = get_search_service()
+        
+        # Perform advanced search
+        async with GoogleBooksSearchService() as service:
+            results = await service.advanced_search(
+                title=title,
+                author=author,
+                publisher=publisher,
+                category=category,
+                isbn=isbn,
+                max_results=max_results,
+                start_index=start_index,
+                order_by=order_by,
+                lang_restrict=lang
+            )
+        
+        if not results.get('success', False):
+            # Log error but return empty results
+            logger.error(f"Advanced search failed: {results.get('error', 'Unknown error')}")
+            return {
+                'success': False,
+                'error': results.get('error', 'Advanced search failed'),
+                'books': [],
+                'total_items': 0
+            }
+        
+        return results
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error in advanced search: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail="Internal server error during advanced search"
+        )
+
+@router.get("/books/author/{author}")
+async def search_by_author(
+    author: str = Path(..., min_length=1, max_length=200, description="Author name"),
+    max_results: int = Query(10, ge=1, le=40, description="Maximum results to return"),
+    start_index: int = Query(0, ge=0, description="Starting index for pagination"),
+    order_by: str = Query("relevance", regex="^(relevance|newest)$", description="Sort order"),
+    lang: Optional[str] = Query(None, min_length=2, max_length=5, description="Language restriction")
+) -> Dict[str, Any]:
+    """
+    Search for books by author
+    
+    Args:
+        author: Author name
+        max_results: Maximum number of results (1-40)
+        start_index: Starting index for pagination
+        order_by: Sort order ('relevance' or 'newest')
+        lang: Language restriction (e.g., 'en' for English)
+    
+    Returns:
+        Search results with books and metadata
+    """
+    try:
+        # Get search service
+        search_service = get_search_service()
+        
+        # Search by author
+        async with GoogleBooksSearchService() as service:
+            results = await service.search_by_author(
+                author=author,
+                max_results=max_results,
+                start_index=start_index,
+                order_by=order_by,
+                lang_restrict=lang
+            )
+        
+        if not results.get('success', False):
+            logger.error(f"Author search failed: {results.get('error', 'Unknown error')}")
+            return {
+                'success': False,
+                'error': results.get('error', 'Author search failed'),
+                'books': [],
+                'total_items': 0
+            }
+        
+        return results
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error in author search: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail="Internal server error during author search"
         )
 
 # Export router

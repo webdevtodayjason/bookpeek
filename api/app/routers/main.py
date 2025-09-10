@@ -28,6 +28,8 @@ async def root():
             "search": "/api/search/books",
             "isbn_search": "/api/search/books/isbn/{isbn}",
             "book_details": "/api/search/books/{volume_id}",
+            "advanced_search": "/api/search/books/advanced",
+            "author_search": "/api/search/books/author/{author}",
             "health": "/health"
         }
     }
